@@ -1,13 +1,15 @@
 import Std
 
-/-! Complete focalization for ACTMult, Lean 4.19.0.
-Self-contained file: no local modules or mathlib required. -/
+/-! Complete focusing for ACTMult, Lean 4.19.0.
+Self-contained: no local modules or Mathlib required.
 
+Part I contains exactly the definitions needed to state the main theorem.
+Part II introduces auxiliary definitions and proves the theorem.
+-/
 
-/- ===== Focusing/Syntax.lean ===== -/
-
-/-! Syntax of the noncommutative infinitary action calculus with multiplexing. -/
 namespace Focusing
+
+/-! ## Part I. Definitions of the theorem's calculi and initial marking -/
 
 inductive Formula where
   | atom : Nat → Formula
@@ -35,10 +37,6 @@ def negative : Formula → Bool
   | .ldiv _ _ | .rdiv _ _ | .conj _ _ => true
   | _ => false
 
-def multiplex : Formula → Bool
-  | .bang _ => true
-  | _ => false
-
 def rightSync : Formula → Bool
   | .atom _ | .zero | .one | .tensor _ _ | .disj _ _ | .star _ => true
   | _ => false
@@ -62,91 +60,10 @@ inductive Judgment where
   | right : Context → Formula → Judgment
   deriving DecidableEq, Repr
 
-namespace Judgment
-
-def context : Judgment → Context
-  | .up L R _ _ => L ++ R
-  | .left L A R _ => L ++ A :: R
-  | .right Γ _ => Γ
-
-def succedent : Judgment → Formula
-  | .up _ _ C _ | .left _ _ _ C | .right _ C => C
-
-end Judgment
-
-/-- Split immediately before the first positive formula. -/
-def split : Context → Context × Context
-  | [] => ([], [])
-  | A :: Γ => if A.positive then ([], A :: Γ)
-              else let p := split Γ; (A :: p.1, p.2)
-
 def foc (Γ : Context) (A : Formula) : Judgment :=
-  let p := split Γ
-  .up p.1 p.2 A (if A.negative then .active else .stored)
-
-def root (Γ : Context) (A : Formula) : Judgment :=
   .up [] Γ A .active
 
-theorem split_append (Γ : Context) : (split Γ).1 ++ (split Γ).2 = Γ := by
-  induction Γ with
-  | nil => rfl
-  | cons A Γ ih =>
-    simp only [split]
-    split <;> simp_all
-
-@[simp] theorem foc_context (Γ : Context) (A : Formula) :
-    (foc Γ A).context = Γ := by
-  simp only [foc, Judgment.context, split_append]
-
-@[simp] theorem foc_succedent (Γ : Context) (A : Formula) :
-    (foc Γ A).succedent = A := rfl
-
-end Focusing
-
-
-/- ===== Focusing/Calculi.lean ===== -/
-
-namespace Focusing
 open Formula Judgment Side
-
-/-- ACTMult plus normalized cuts for the hypotheses H.
-The star-left constructor has genuinely countably many premises. -/
-inductive Unfocused (H : Theory) : Context → Formula → Prop where
-  | identity (p) : Unfocused H [atom p] (atom p)
-  | tensorL {L R A B C} : Unfocused H (L ++ A :: B :: R) C →
-      Unfocused H (L ++ tensor A B :: R) C
-  | tensorR {Γ Δ A B} : Unfocused H Γ A → Unfocused H Δ B →
-      Unfocused H (Γ ++ Δ) (tensor A B)
-  | ldivL {L Ξ R A B C} : Unfocused H (L ++ B :: R) C →
-      Unfocused H Ξ A → Unfocused H (L ++ Ξ ++ ldiv A B :: R) C
-  | ldivR {Γ A B} : Unfocused H (A :: Γ) B → Unfocused H Γ (ldiv A B)
-  | rdivL {L Ξ R A B C} : Unfocused H (L ++ B :: R) C →
-      Unfocused H Ξ A → Unfocused H (L ++ rdiv B A :: (Ξ ++ R)) C
-  | rdivR {Γ A B} : Unfocused H (Γ ++ [A]) B → Unfocused H Γ (rdiv B A)
-  | zeroL (L R C) : Unfocused H (L ++ zero :: R) C
-  | oneL {L R C} : Unfocused H (L ++ R) C → Unfocused H (L ++ one :: R) C
-  | oneR : Unfocused H [] one
-  | conjL₁ {L R A B C} : Unfocused H (L ++ A :: R) C →
-      Unfocused H (L ++ conj A B :: R) C
-  | conjL₂ {L R A B C} : Unfocused H (L ++ B :: R) C →
-      Unfocused H (L ++ conj A B :: R) C
-  | conjR {Γ A B} : Unfocused H Γ A → Unfocused H Γ B →
-      Unfocused H Γ (conj A B)
-  | disjL {L R A B C} : Unfocused H (L ++ A :: R) C →
-      Unfocused H (L ++ B :: R) C → Unfocused H (L ++ disj A B :: R) C
-  | disjR₁ {Γ A B} : Unfocused H Γ A → Unfocused H Γ (disj A B)
-  | disjR₂ {Γ A B} : Unfocused H Γ B → Unfocused H Γ (disj A B)
-  | starL {L R A C} :
-      (∀ n : Nat, Unfocused H (L ++ List.replicate n A ++ R) C) →
-      Unfocused H (L ++ star A :: R) C
-  | starR {A} (parts : List Context) :
-      (∀ Γ ∈ parts, Unfocused H Γ A) → Unfocused H parts.flatten (star A)
-  | bangL {L R A C} (n : Nat) :
-      Unfocused H (L ++ List.replicate n A ++ R) C →
-      Unfocused H (L ++ bang A :: R) C
-  | bangR {A B} : Unfocused H [A] B → Unfocused H [bang A] (bang B)
-  | ncut {L R A C} : H A → Unfocused H (L ++ A :: R) C →
-      Unfocused H (L ++ R) C
 
 /-- The original calculus with arbitrary cuts and hypotheses. -/
 inductive Ordinary (H : Theory) : Context → Formula → Prop where
@@ -187,7 +104,7 @@ inductive Ordinary (H : Theory) : Context → Formula → Prop where
   | cut {L R Ξ A C} : Ordinary H Ξ A → Ordinary H (L ++ A :: R) C →
       Ordinary H (L ++ Ξ ++ R) C
 
-/-- The focused rules in focusing_rules.tex, plus decide_H.
+/-- The focused rules of the dissertation, plus decide_H.
 No positivity restriction is imposed on passive contexts. -/
 inductive Focused (H : Theory) : Judgment → Prop where
   | identity (p) : Focused H (.right [atom p] (atom p))
@@ -242,6 +159,105 @@ inductive Focused (H : Theory) : Judgment → Prop where
       Focused H (.right Γ A) → Focused H (.up Γ [] A .stored)
   | decideH {L R A C} : H A →
       Focused H (.left L A R C) → Focused H (.up (L ++ R) [] C .stored)
+
+
+/-!
+The main statement, proved as `Focusing.focusing` below, is:
+
+  ∀ {H : Theory} {Γ : Context} {A : Formula},
+    Ordinary H Γ A ↔ Focused H (foc Γ A)
+
+Here `foc Γ A` is exactly · ↑ Γ ⇒ A ↑ ·.
+-/
+
+/-! ## Part II. Auxiliary definitions and proofs -/
+
+/-- Compatibility alias for the first published version's Audit.lean.
+New theorem statements and proofs use `foc`. -/
+abbrev root (Γ : Context) (A : Formula) : Judgment := foc Γ A
+
+namespace Formula
+
+def multiplex : Formula → Bool
+  | .bang _ => true
+  | _ => false
+
+end Formula
+
+namespace Judgment
+
+def context : Judgment → Context
+  | .up L R _ _ => L ++ R
+  | .left L A R _ => L ++ A :: R
+  | .right Γ _ => Γ
+
+def succedent : Judgment → Formula
+  | .up _ _ C _ | .left _ _ _ C | .right _ C => C
+
+end Judgment
+
+/-- Split immediately before the first positive formula. -/
+def split : Context → Context × Context
+  | [] => ([], [])
+  | A :: Γ => if A.positive then ([], A :: Γ)
+              else let p := split Γ; (A :: p.1, p.2)
+
+def canonical (Γ : Context) (A : Formula) : Judgment :=
+  let p := split Γ
+  .up p.1 p.2 A (if A.negative then .active else .stored)
+
+theorem split_append (Γ : Context) : (split Γ).1 ++ (split Γ).2 = Γ := by
+  induction Γ with
+  | nil => rfl
+  | cons A Γ ih =>
+    simp only [split]
+    split <;> simp_all
+
+@[simp] theorem canonical_context (Γ : Context) (A : Formula) :
+    (canonical Γ A).context = Γ := by
+  simp only [canonical, Judgment.context, split_append]
+
+@[simp] theorem canonical_succedent (Γ : Context) (A : Formula) :
+    (canonical Γ A).succedent = A := rfl
+
+/-- ACTMult plus normalized cuts for the hypotheses H.
+The star-left constructor has genuinely countably many premises. -/
+inductive Unfocused (H : Theory) : Context → Formula → Prop where
+  | identity (p) : Unfocused H [atom p] (atom p)
+  | tensorL {L R A B C} : Unfocused H (L ++ A :: B :: R) C →
+      Unfocused H (L ++ tensor A B :: R) C
+  | tensorR {Γ Δ A B} : Unfocused H Γ A → Unfocused H Δ B →
+      Unfocused H (Γ ++ Δ) (tensor A B)
+  | ldivL {L Ξ R A B C} : Unfocused H (L ++ B :: R) C →
+      Unfocused H Ξ A → Unfocused H (L ++ Ξ ++ ldiv A B :: R) C
+  | ldivR {Γ A B} : Unfocused H (A :: Γ) B → Unfocused H Γ (ldiv A B)
+  | rdivL {L Ξ R A B C} : Unfocused H (L ++ B :: R) C →
+      Unfocused H Ξ A → Unfocused H (L ++ rdiv B A :: (Ξ ++ R)) C
+  | rdivR {Γ A B} : Unfocused H (Γ ++ [A]) B → Unfocused H Γ (rdiv B A)
+  | zeroL (L R C) : Unfocused H (L ++ zero :: R) C
+  | oneL {L R C} : Unfocused H (L ++ R) C → Unfocused H (L ++ one :: R) C
+  | oneR : Unfocused H [] one
+  | conjL₁ {L R A B C} : Unfocused H (L ++ A :: R) C →
+      Unfocused H (L ++ conj A B :: R) C
+  | conjL₂ {L R A B C} : Unfocused H (L ++ B :: R) C →
+      Unfocused H (L ++ conj A B :: R) C
+  | conjR {Γ A B} : Unfocused H Γ A → Unfocused H Γ B →
+      Unfocused H Γ (conj A B)
+  | disjL {L R A B C} : Unfocused H (L ++ A :: R) C →
+      Unfocused H (L ++ B :: R) C → Unfocused H (L ++ disj A B :: R) C
+  | disjR₁ {Γ A B} : Unfocused H Γ A → Unfocused H Γ (disj A B)
+  | disjR₂ {Γ A B} : Unfocused H Γ B → Unfocused H Γ (disj A B)
+  | starL {L R A C} :
+      (∀ n : Nat, Unfocused H (L ++ List.replicate n A ++ R) C) →
+      Unfocused H (L ++ star A :: R) C
+  | starR {A} (parts : List Context) :
+      (∀ Γ ∈ parts, Unfocused H Γ A) → Unfocused H parts.flatten (star A)
+  | bangL {L R A C} (n : Nat) :
+      Unfocused H (L ++ List.replicate n A ++ R) C →
+      Unfocused H (L ++ bang A :: R) C
+  | bangR {A B} : Unfocused H [A] B → Unfocused H [bang A] (bang B)
+  | ncut {L R A C} : H A → Unfocused H (L ++ A :: R) C →
+      Unfocused H (L ++ R) C
 
 end Focusing
 
@@ -312,15 +328,15 @@ theorem up_scan_iff {H : Theory} (L Γ : Context) (C : Formula) (s : Side) :
         ⟨store_left_inverse hp, Focused.storeL hp⟩
       simpa [split, hp, List.append_assoc] using hs.trans (ih (L ++ [A]))
 
-/-- Equivalence of the theorem's root judgment and the canonical judgment. -/
-theorem root_iff_foc {H : Theory} {Γ : Context} {A : Formula} :
-    Focused H (root Γ A) ↔ Focused H (foc Γ A) := by
+/-- Equivalence of the theorem's foc judgment and the canonical judgment. -/
+theorem foc_iff_canonical {H : Theory} {Γ : Context} {A : Formula} :
+    Focused H (foc Γ A) ↔ Focused H (canonical Γ A) := by
   have hs := up_scan_iff (H := H) [] Γ A .active
   simp only [List.nil_append] at hs
   cases hn : A.negative with
-  | true => simpa [root, foc, hn] using hs
+  | true => simpa [foc, canonical, hn] using hs
   | false =>
-    simpa [root, foc, hn] using hs.trans (store_right_iff hn)
+    simpa [foc, canonical, hn] using hs.trans (store_right_iff hn)
 
 end Focusing
 
@@ -634,9 +650,9 @@ theorem expand_block_iff {H : Theory} (P Γ R L : Context) (C : Formula) (s : Si
     exact (scan_nonpositive_iff eΔ.nonpositive).mp d₁
 
 theorem tensor_left_any_iff {H : Theory} {L R A B C} :
-    Focused H (root (L ++ tensor A B :: R) C) ↔
-    Focused H (root (L ++ A :: B :: R) C) := by
-  unfold root
+    Focused H (foc (L ++ tensor A B :: R) C) ↔
+    Focused H (foc (L ++ A :: B :: R) C) := by
+  unfold foc
   constructor
   · intro d
     apply expand_context_build L
@@ -648,8 +664,8 @@ theorem tensor_left_any_iff {H : Theory} {L R A B C} :
     exact .tensorL (expand_context_take eΔ d)
 
 theorem one_left_any_iff {H : Theory} {L R C} :
-    Focused H (root (L ++ one :: R) C) ↔ Focused H (root (L ++ R) C) := by
-  unfold root
+    Focused H (foc (L ++ one :: R) C) ↔ Focused H (foc (L ++ R) C) := by
+  unfold foc
   constructor
   · intro d
     apply expand_context_build L
@@ -661,9 +677,9 @@ theorem one_left_any_iff {H : Theory} {L R C} :
     exact .oneL (expand_context_take eΔ d)
 
 theorem disj_left_any_iff {H : Theory} {L R A B C} :
-    Focused H (root (L ++ disj A B :: R) C) ↔
-    Focused H (root (L ++ A :: R) C) ∧ Focused H (root (L ++ B :: R) C) := by
-  unfold root
+    Focused H (foc (L ++ disj A B :: R) C) ↔
+    Focused H (foc (L ++ A :: R) C) ∧ Focused H (foc (L ++ B :: R) C) := by
+  unfold foc
   constructor
   · intro d
     constructor
@@ -679,9 +695,9 @@ theorem disj_left_any_iff {H : Theory} {L R A B C} :
     exact .disjL (expand_context_take eΔ d₁) (expand_context_take eΔ d₂)
 
 theorem star_left_any_iff {H : Theory} {L R A C} :
-    Focused H (root (L ++ star A :: R) C) ↔
-    ∀ n, Focused H (root (L ++ List.replicate n A ++ R) C) := by
-  unfold root
+    Focused H (foc (L ++ star A :: R) C) ↔
+    ∀ n, Focused H (foc (L ++ List.replicate n A ++ R) C) := by
+  unfold foc
   constructor
   · intro d n
     rw [List.append_assoc]
@@ -694,7 +710,7 @@ theorem star_left_any_iff {H : Theory} {L R A C} :
     exact .starL (fun n => expand_context_take eΔ (by simpa [List.append_assoc] using h n))
 
 theorem zero_left_any {H : Theory} (L R : Context) (C : Formula) :
-    Focused H (root (L ++ zero :: R) C) := by
+    Focused H (foc (L ++ zero :: R) C) := by
   apply expand_context_build L
   intro Δ eΔ
   exact .zeroL _ _ _ _
@@ -705,14 +721,14 @@ theorem scan_empty_build {H : Theory} (Γ : Context) {L C s}
   simpa using expand_context_build Γ (R := []) h
 
 theorem ldiv_right_any_iff {H : Theory} {Γ A B} :
-    Focused H (root Γ (ldiv A B)) ↔ Focused H (root (A :: Γ) B) := by
+    Focused H (foc Γ (ldiv A B)) ↔ Focused H (foc (A :: Γ) B) := by
   have eqv := expand_block_iff (H := H) [A] Γ [] [] B .active
   simp only [List.append_nil, List.singleton_append] at eqv
   constructor
   · intro d
     apply eqv.mpr
     intro Δ eΔ
-    exact ldiv_right_iff.mp (expand_context_take eΔ (R := []) (by simpa [root] using d))
+    exact ldiv_right_iff.mp (expand_context_take eΔ (R := []) (by simpa [foc] using d))
   · intro d
     apply scan_empty_build Γ
     intro Δ eΔ
@@ -720,8 +736,8 @@ theorem ldiv_right_any_iff {H : Theory} {Γ A B} :
     exact eqv.mp d Δ eΔ
 
 theorem rdiv_right_any_iff {H : Theory} {Γ A B} :
-    Focused H (root Γ (rdiv B A)) ↔ Focused H (root (Γ ++ [A]) B) := by
-  unfold root
+    Focused H (foc Γ (rdiv B A)) ↔ Focused H (foc (Γ ++ [A]) B) := by
+  unfold foc
   constructor
   · intro d
     apply expand_context_build Γ
@@ -733,9 +749,9 @@ theorem rdiv_right_any_iff {H : Theory} {Γ A B} :
     exact .rdivR (expand_context_take eΔ d)
 
 theorem conj_right_any_iff {H : Theory} {Γ A B} :
-    Focused H (root Γ (conj A B)) ↔
-    Focused H (root Γ A) ∧ Focused H (root Γ B) := by
-  unfold root
+    Focused H (foc Γ (conj A B)) ↔
+    Focused H (foc Γ A) ∧ Focused H (foc Γ B) := by
+  unfold foc
   constructor
   · intro d
     constructor
@@ -751,9 +767,9 @@ theorem conj_right_any_iff {H : Theory} {Γ A B} :
     exact .conjR (expand_context_take eΔ (R := []) (by simpa using d₁))
       (expand_context_take eΔ (R := []) (by simpa using d₂))
 
-theorem root_expand_block {H : Theory} {P Γ R Δ C}
-    (d : Focused H (root (P ++ Γ ++ R) C)) (e : ExpandsContext Γ Δ) :
-    Focused H (root (P ++ Δ ++ R) C) :=
+theorem foc_expand_block {H : Theory} {P Γ R Δ C}
+    (d : Focused H (foc (P ++ Γ ++ R) C)) (e : ExpandsContext Γ Δ) :
+    Focused H (foc (P ++ Δ ++ R) C) :=
   (expand_block_iff P Γ R [] C .active).mp d Δ e
 
 end Focusing
@@ -1279,18 +1295,18 @@ theorem focused_continuation {H : Theory} {P Q : Context} {A C : Formula}
     have e := Focused.decideH hp (ih eq nΓ.take_left nΓ.take_right)
     simpa [List.append_assoc] using e
 
-/-- A convenient root-level form of the continuation lemma. -/
-theorem root_continuation {H : Theory} {P Q Γ : Context} {A C : Formula}
+/-- A convenient foc-level form of the continuation lemma. -/
+theorem foc_continuation {H : Theory} {P Q Γ : Context} {A C : Formula}
     (nP : Nonpositive P) (nQ : Nonpositive Q) (nc : C.negative = false)
     (k : ∀ Δ, Nonpositive Δ → Focused H (.right Δ A) →
       Focused H (.up (P ++ Δ ++ Q) [] C .stored))
-    (d : Focused H (root Γ A)) : Focused H (root (P ++ Γ ++ Q) C) := by
+    (d : Focused H (foc Γ A)) : Focused H (foc (P ++ Γ ++ Q) C) := by
   have e := focused_continuation nQ k d rfl (by simp [Nonpositive])
   have e' := (store_right_iff nc).mpr e
-  unfold root
+  unfold foc
   rw [List.append_assoc]
   apply (scan_nonpositive_iff nP).mpr
-  simpa [root, List.append_assoc] using e'
+  simpa [foc, List.append_assoc] using e'
 
 end Focusing
 
@@ -1300,39 +1316,39 @@ end Focusing
 namespace Focusing
 open Formula Judgment Side
 
-theorem root_to_stored {H : Theory} {Γ C} (nΓ : Nonpositive Γ)
-    (nc : C.negative = false) (d : Focused H (root Γ C)) :
+theorem foc_to_stored {H : Theory} {Γ C} (nΓ : Nonpositive Γ)
+    (nc : C.negative = false) (d : Focused H (foc Γ C)) :
     Focused H (.up Γ [] C .stored) := by
   apply (store_right_iff nc).mp
-  exact (scan_nonpositive_iff (L := []) (R := []) nΓ).mp (by simpa [root] using d)
+  exact (scan_nonpositive_iff (L := []) (R := []) nΓ).mp (by simpa [foc] using d)
 
 theorem stored_to_root {H : Theory} {Γ C} (nΓ : Nonpositive Γ)
     (nc : C.negative = false) (d : Focused H (.up Γ [] C .stored)) :
-    Focused H (root Γ C) := by
+    Focused H (foc Γ C) := by
   have e := (scan_nonpositive_iff (L := []) (R := []) nΓ).mpr (Focused.storeR nc d)
-  simpa [root] using e
+  simpa [foc] using e
 
 private theorem replacement_nonnegs {H : Theory} {T K}
     (nk : Nonpositive K)
     (critical : ∀ {L R C}, Focused H (.left L T R C) →
       Focused H (.up (L ++ K ++ R) [] C .stored))
     {L R C} (nc : C.negative = false)
-    (d : Focused H (root (L ++ T :: R) C)) :
-    Focused H (root (L ++ K ++ R) C) := by
+    (d : Focused H (foc (L ++ T :: R) C)) :
+    Focused H (foc (L ++ K ++ R) C) := by
   have eqv := (expand_block_iff (H := H) [] L (K ++ R) [] C .active)
   simp only [List.append_assoc, List.nil_append, List.append_nil, List.singleton_append] at eqv
-  try simp only [root, List.append_assoc, List.nil_append, List.append_nil, List.singleton_append]
+  try simp only [foc, List.append_assoc, List.nil_append, List.append_nil, List.singleton_append]
   apply eqv.mpr
   intro L' eL
   have eqv := (expand_block_iff (H := H) (L' ++ K) R [] [] C .active)
   simp only [List.append_assoc, List.nil_append, List.append_nil, List.singleton_append] at eqv
-  try simp only [root, List.append_assoc, List.nil_append, List.append_nil, List.singleton_append]
+  try simp only [foc, List.append_assoc, List.nil_append, List.append_nil, List.singleton_append]
   apply eqv.mpr
   intro R' eR
-  have dL := root_expand_block (P := []) (Γ := L) (R := T :: R) (by simpa using d) eL
-  have dR := root_expand_block (P := L' ++ [T]) (Γ := R) (R := [])
+  have dL := foc_expand_block (P := []) (Γ := L) (R := T :: R) (by simpa using d) eL
+  have dR := foc_expand_block (P := L' ++ [T]) (Γ := R) (R := [])
     (by simpa [List.append_assoc] using dL) eR
-  have ds : Focused H (root (L' ++ T :: R') C) := by
+  have ds : Focused H (foc (L' ++ T :: R') C) := by
     simpa [List.append_assoc] using dR
   cases nt : T.negative with
   | true =>
@@ -1341,16 +1357,16 @@ private theorem replacement_nonnegs {H : Theory} {T K}
   | false =>
     have e : Focused H (.up L' (T :: R') C .stored) :=
       (store_right_iff nc).mp ((scan_nonpositive_iff eL.nonpositive).mp ds)
-    simpa [root, List.append_assoc] using stored_to_root ((eL.nonpositive.append nk).append eR.nonpositive) nc
+    simpa [foc, List.append_assoc] using stored_to_root ((eL.nonpositive.append nk).append eR.nonpositive) nc
       (critical (.releaseL nt e))
 
-/-- Lifting a focused critical case to replacement in an arbitrary root context. -/
+/-- Lifting a focused critical case to replacement in an arbitrary foc context. -/
 theorem replacement_admissible {H : Theory} {T K}
     (nk : Nonpositive K)
     (critical : ∀ {L R C}, Focused H (.left L T R C) →
       Focused H (.up (L ++ K ++ R) [] C .stored))
-    {L R C} (d : Focused H (root (L ++ T :: R) C)) :
-    Focused H (root (L ++ K ++ R) C) := by
+    {L R C} (d : Focused H (foc (L ++ T :: R) C)) :
+    Focused H (foc (L ++ K ++ R) C) := by
   induction C generalizing L R with
   | atom p => exact replacement_nonnegs nk critical rfl d
   | zero => exact replacement_nonnegs nk critical rfl d
@@ -1372,36 +1388,36 @@ theorem replacement_admissible {H : Theory} {T K}
 
 /-- Every normalized hypothesis cut is an instance of contextual replacement. -/
 theorem normalized_cut_admissible {H : Theory} {T : Formula} (ht : H T)
-    {L R C} (d : Focused H (root (L ++ T :: R) C)) :
-    Focused H (root (L ++ R) C) := by
+    {L R C} (d : Focused H (foc (L ++ T :: R) C)) :
+    Focused H (foc (L ++ R) C) := by
   simpa using replacement_admissible (K := []) (by simp [Nonpositive])
     (fun {L R C} e => by simpa using Focused.decideH ht e) d
 
 theorem conj_left₁_admissible {H : Theory} {L R A B C}
-    (d : Focused H (root (L ++ A :: R) C)) :
-    Focused H (root (L ++ conj A B :: R) C) := by
+    (d : Focused H (foc (L ++ A :: R) C)) :
+    Focused H (foc (L ++ conj A B :: R) C) := by
   simpa [List.append_assoc] using replacement_admissible (K := [conj A B])
     (.singleton rfl) (fun {L R C} e => by simpa [List.append_assoc] using Focused.decideL rfl (Focused.conjL₁ (B := B) e)) d
 
 theorem conj_left₂_admissible {H : Theory} {L R A B C}
-    (d : Focused H (root (L ++ B :: R) C)) :
-    Focused H (root (L ++ conj A B :: R) C) := by
+    (d : Focused H (foc (L ++ B :: R) C)) :
+    Focused H (foc (L ++ conj A B :: R) C) := by
   simpa [List.append_assoc] using replacement_admissible (K := [conj A B])
     (.singleton rfl) (fun {L R C} e => by simpa [List.append_assoc] using Focused.decideL rfl (Focused.conjL₂ (A := A) e)) d
 
 theorem ldiv_left_focused_argument {H : Theory} {L Ξ R A B C}
-    (nΞ : Nonpositive Ξ) (d : Focused H (root (L ++ B :: R) C))
+    (nΞ : Nonpositive Ξ) (d : Focused H (foc (L ++ B :: R) C))
     (a : Focused H (.right Ξ A)) :
-    Focused H (root (L ++ Ξ ++ ldiv A B :: R) C) := by
+    Focused H (foc (L ++ Ξ ++ ldiv A B :: R) C) := by
   have e := replacement_admissible (K := Ξ ++ [ldiv A B])
     (nΞ.append (.singleton rfl)) (d := d) (fun {L R C} h => by
       simpa [List.append_assoc] using Focused.decideL rfl (Focused.ldivL h a))
   simpa [List.append_assoc] using e
 
 theorem rdiv_left_focused_argument {H : Theory} {L Ξ R A B C}
-    (nΞ : Nonpositive Ξ) (d : Focused H (root (L ++ B :: R) C))
+    (nΞ : Nonpositive Ξ) (d : Focused H (foc (L ++ B :: R) C))
     (a : Focused H (.right Ξ A)) :
-    Focused H (root (L ++ rdiv B A :: (Ξ ++ R)) C) := by
+    Focused H (foc (L ++ rdiv B A :: (Ξ ++ R)) C) := by
   have e := replacement_admissible (K := rdiv B A :: Ξ)
     ((Nonpositive.singleton rfl).append nΞ) (d := d) (fun {L R C} h => by
       simpa [List.append_assoc] using Focused.decideL rfl (Focused.rdivL h a))
@@ -1409,67 +1425,67 @@ theorem rdiv_left_focused_argument {H : Theory} {L Ξ R A B C}
 
 private theorem ldiv_left_stable {H : Theory} {L Ξ R A B C}
     (nL : Nonpositive L) (nR : Nonpositive R) (nc : C.negative = false)
-    (d : Focused H (root (L ++ B :: R) C)) (a : Focused H (root Ξ A)) :
-    Focused H (root (L ++ Ξ ++ ldiv A B :: R) C) := by
-  apply root_continuation nL ((Nonpositive.singleton rfl).append nR) nc (d := a)
+    (d : Focused H (foc (L ++ B :: R) C)) (a : Focused H (foc Ξ A)) :
+    Focused H (foc (L ++ Ξ ++ ldiv A B :: R) C) := by
+  apply foc_continuation nL ((Nonpositive.singleton rfl).append nR) nc (d := a)
   intro Δ nΔ e
-  exact root_to_stored ((nL.append nΔ).append ((Nonpositive.singleton rfl).append nR)) nc
+  exact foc_to_stored ((nL.append nΔ).append ((Nonpositive.singleton rfl).append nR)) nc
     (ldiv_left_focused_argument nΔ d e)
 
 private theorem rdiv_left_stable {H : Theory} {L Ξ R A B C}
     (nL : Nonpositive L) (nR : Nonpositive R) (nc : C.negative = false)
-    (d : Focused H (root (L ++ B :: R) C)) (a : Focused H (root Ξ A)) :
-    Focused H (root (L ++ rdiv B A :: (Ξ ++ R)) C) := by
-  have e := root_continuation (nL.append (Nonpositive.singleton (A := rdiv B A) rfl)) nR nc (d := a)
+    (d : Focused H (foc (L ++ B :: R) C)) (a : Focused H (foc Ξ A)) :
+    Focused H (foc (L ++ rdiv B A :: (Ξ ++ R)) C) := by
+  have e := foc_continuation (nL.append (Nonpositive.singleton (A := rdiv B A) rfl)) nR nc (d := a)
     (fun Δ nΔ e => by
       have h := rdiv_left_focused_argument nΔ d e
-      apply root_to_stored (((nL.append (Nonpositive.singleton (A := rdiv B A) rfl)).append nΔ).append nR) nc
+      apply foc_to_stored (((nL.append (Nonpositive.singleton (A := rdiv B A) rfl)).append nΔ).append nR) nc
       simpa [List.append_assoc] using h)
   simpa [List.append_assoc] using e
 
 private theorem ldiv_left_nonnegs {H : Theory} {L Ξ R A B C}
     (nc : C.negative = false)
-    (d : Focused H (root (L ++ B :: R) C)) (a : Focused H (root Ξ A)) :
-    Focused H (root (L ++ Ξ ++ ldiv A B :: R) C) := by
+    (d : Focused H (foc (L ++ B :: R) C)) (a : Focused H (foc Ξ A)) :
+    Focused H (foc (L ++ Ξ ++ ldiv A B :: R) C) := by
   have eqv := (expand_block_iff (H := H) [] L (Ξ ++ ldiv A B :: R) [] C .active)
   simp only [List.append_assoc, List.nil_append, List.append_nil, List.singleton_append] at eqv
-  try simp only [root, List.append_assoc, List.nil_append, List.append_nil, List.singleton_append]
+  try simp only [foc, List.append_assoc, List.nil_append, List.append_nil, List.singleton_append]
   apply eqv.mpr
   intro L' eL
   have eqv := (expand_block_iff (H := H) (L' ++ Ξ ++ [ldiv A B]) R [] [] C .active)
   simp only [List.append_assoc, List.nil_append, List.append_nil, List.singleton_append] at eqv
-  try simp only [root, List.append_assoc, List.nil_append, List.append_nil, List.singleton_append]
+  try simp only [foc, List.append_assoc, List.nil_append, List.append_nil, List.singleton_append]
   apply eqv.mpr
   intro R' eR
-  have dL := root_expand_block (P := []) (Γ := L) (R := B :: R) (by simpa using d) eL
-  have dR := root_expand_block (P := L' ++ [B]) (Γ := R) (R := [])
+  have dL := foc_expand_block (P := []) (Γ := L) (R := B :: R) (by simpa using d) eL
+  have dR := foc_expand_block (P := L' ++ [B]) (Γ := R) (R := [])
     (by simpa [List.append_assoc] using dL) eR
-  simpa [root, List.append_assoc] using ldiv_left_stable eL.nonpositive eR.nonpositive nc
+  simpa [foc, List.append_assoc] using ldiv_left_stable eL.nonpositive eR.nonpositive nc
     (by simpa [List.append_assoc] using dR) a
 
 private theorem rdiv_left_nonnegs {H : Theory} {L Ξ R A B C}
     (nc : C.negative = false)
-    (d : Focused H (root (L ++ B :: R) C)) (a : Focused H (root Ξ A)) :
-    Focused H (root (L ++ rdiv B A :: (Ξ ++ R)) C) := by
+    (d : Focused H (foc (L ++ B :: R) C)) (a : Focused H (foc Ξ A)) :
+    Focused H (foc (L ++ rdiv B A :: (Ξ ++ R)) C) := by
   have eqv := (expand_block_iff (H := H) [] L (rdiv B A :: (Ξ ++ R)) [] C .active)
   simp only [List.append_assoc, List.nil_append, List.append_nil, List.singleton_append] at eqv
-  try simp only [root, List.append_assoc, List.nil_append, List.append_nil, List.singleton_append]
+  try simp only [foc, List.append_assoc, List.nil_append, List.append_nil, List.singleton_append]
   apply eqv.mpr
   intro L' eL
   have eqv := (expand_block_iff (H := H) (L' ++ [rdiv B A] ++ Ξ) R [] [] C .active)
   simp only [List.append_assoc, List.nil_append, List.append_nil, List.singleton_append] at eqv
-  try simp only [root, List.append_assoc, List.nil_append, List.append_nil, List.singleton_append]
+  try simp only [foc, List.append_assoc, List.nil_append, List.append_nil, List.singleton_append]
   apply eqv.mpr
   intro R' eR
-  have dL := root_expand_block (P := []) (Γ := L) (R := B :: R) (by simpa using d) eL
-  have dR := root_expand_block (P := L' ++ [B]) (Γ := R) (R := [])
+  have dL := foc_expand_block (P := []) (Γ := L) (R := B :: R) (by simpa using d) eL
+  have dR := foc_expand_block (P := L' ++ [B]) (Γ := R) (R := [])
     (by simpa [List.append_assoc] using dL) eR
-  simpa [root, List.append_assoc] using rdiv_left_stable eL.nonpositive eR.nonpositive nc
+  simpa [foc, List.append_assoc] using rdiv_left_stable eL.nonpositive eR.nonpositive nc
     (by simpa [List.append_assoc] using dR) a
 
 theorem ldiv_left_admissible {H : Theory} {L Ξ R A B C}
-    (d : Focused H (root (L ++ B :: R) C)) (a : Focused H (root Ξ A)) :
-    Focused H (root (L ++ Ξ ++ ldiv A B :: R) C) := by
+    (d : Focused H (foc (L ++ B :: R) C)) (a : Focused H (foc Ξ A)) :
+    Focused H (foc (L ++ Ξ ++ ldiv A B :: R) C) := by
   induction C generalizing L R with
   | atom p => exact ldiv_left_nonnegs rfl d a
   | zero => exact ldiv_left_nonnegs rfl d a
@@ -1490,8 +1506,8 @@ theorem ldiv_left_admissible {H : Theory} {L Ξ R A B C}
       ⟨ihD (conj_right_any_iff.mp d).1, ihE (conj_right_any_iff.mp d).2⟩
 
 theorem rdiv_left_admissible {H : Theory} {L Ξ R A B C}
-    (d : Focused H (root (L ++ B :: R) C)) (a : Focused H (root Ξ A)) :
-    Focused H (root (L ++ rdiv B A :: (Ξ ++ R)) C) := by
+    (d : Focused H (foc (L ++ B :: R) C)) (a : Focused H (foc Ξ A)) :
+    Focused H (foc (L ++ rdiv B A :: (Ξ ++ R)) C) := by
   induction C generalizing L R with
   | atom p => exact rdiv_left_nonnegs rfl d a
   | zero => exact rdiv_left_nonnegs rfl d a
@@ -1519,40 +1535,40 @@ end Focusing
 namespace Focusing
 open Formula Judgment Side
 
-theorem root_expand {H : Theory} {Γ Δ A}
-    (d : Focused H (root Γ A)) (e : ExpandsContext Γ Δ) :
-    Focused H (root Δ A) := by
-  simpa using root_expand_block (P := []) (R := []) (by simpa using d) e
+theorem foc_expand {H : Theory} {Γ Δ A}
+    (d : Focused H (foc Γ A)) (e : ExpandsContext Γ Δ) :
+    Focused H (foc Δ A) := by
+  simpa using foc_expand_block (P := []) (R := []) (by simpa using d) e
 
 theorem tensor_right_admissible {H : Theory} {Γ Δ A B}
-    (a : Focused H (root Γ A)) (b : Focused H (root Δ B)) :
-    Focused H (root (Γ ++ Δ) (tensor A B)) := by
+    (a : Focused H (foc Γ A)) (b : Focused H (foc Δ B)) :
+    Focused H (foc (Γ ++ Δ) (tensor A B)) := by
   have eqv := expand_block_iff (H := H) Γ Δ [] [] (tensor A B) .active
   simp only [List.append_nil] at eqv
   apply eqv.mpr
   intro Δ' eΔ
-  have b' := root_expand b eΔ
+  have b' := foc_expand b eΔ
   have nΔ := eΔ.nonpositive
-  have outer := root_continuation (P := []) (Q := Δ') (C := tensor A B)
+  have outer := foc_continuation (P := []) (Q := Δ') (C := tensor A B)
     (by simp [Nonpositive]) nΔ rfl (d := a)
     (fun Ξ nΞ ra => by
-      have inner := root_continuation (P := Ξ) (Q := []) (C := tensor A B)
+      have inner := foc_continuation (P := Ξ) (Q := []) (C := tensor A B)
         nΞ (by simp [Nonpositive]) rfl (d := b')
         (fun Ω nΩ rb => by
           simpa using Focused.decideR rfl (Focused.tensorR ra rb))
-      apply root_to_stored (nΞ.append nΔ) rfl
+      apply foc_to_stored (nΞ.append nΔ) rfl
       simpa using inner)
-  simpa [root] using outer
+  simpa [foc] using outer
 
 theorem disj_right₁_admissible {H : Theory} {Γ A B}
-    (a : Focused H (root Γ A)) : Focused H (root Γ (disj A B)) := by
-  simpa using root_continuation (P := []) (Q := []) (C := disj A B)
+    (a : Focused H (foc Γ A)) : Focused H (foc Γ (disj A B)) := by
+  simpa using foc_continuation (P := []) (Q := []) (C := disj A B)
     (by simp [Nonpositive]) (by simp [Nonpositive]) rfl
     (fun Δ _ ra => by simpa using Focused.decideR rfl (Focused.disjR₁ (B := B) ra)) a
 
 theorem disj_right₂_admissible {H : Theory} {Γ A B}
-    (b : Focused H (root Γ B)) : Focused H (root Γ (disj A B)) := by
-  simpa using root_continuation (P := []) (Q := []) (C := disj A B)
+    (b : Focused H (foc Γ B)) : Focused H (foc Γ (disj A B)) := by
+  simpa using foc_continuation (P := []) (Q := []) (C := disj A B)
     (by simp [Nonpositive]) (by simp [Nonpositive]) rfl
     (fun Δ _ rb => by simpa using Focused.decideR rfl (Focused.disjR₂ (A := A) rb)) b
 
@@ -1581,7 +1597,7 @@ theorem nonpositive_flatten {parts : List Context}
 /-- Collect any finite family of right focuses using structural continuations. -/
 theorem collect_right {H : Theory} {A C : Formula} (nc : C.negative = false)
     (parts : List Context) (np : ∀ Γ ∈ parts, Nonpositive Γ)
-    (ds : ∀ Γ ∈ parts, Focused H (root Γ A)) :
+    (ds : ∀ Γ ∈ parts, Focused H (foc Γ A)) :
     ∀ P, Nonpositive P →
     (∀ parts' : List Context,
       (∀ Γ ∈ parts', Nonpositive Γ ∧ Focused H (.right Γ A)) →
@@ -1592,8 +1608,8 @@ theorem collect_right {H : Theory} {A C : Formula} (nc : C.negative = false)
   | cons Γ parts ih =>
     intro P nP k
     have npRest : ∀ Δ ∈ parts, Nonpositive Δ := fun Δ hm => np Δ (by simp [hm])
-    have dsRest : ∀ Δ ∈ parts, Focused H (root Δ A) := fun Δ hm => ds Δ (by simp [hm])
-    have e := root_continuation nP (nonpositive_flatten npRest) nc
+    have dsRest : ∀ Δ ∈ parts, Focused H (foc Δ A) := fun Δ hm => ds Δ (by simp [hm])
+    have e := foc_continuation nP (nonpositive_flatten npRest) nc
       (d := ds Γ (by simp)) (fun Ξ nΞ rΞ => by
         apply ih npRest dsRest (P ++ Ξ) (nP.append nΞ)
         intro parts' hp
@@ -1603,12 +1619,12 @@ theorem collect_right {H : Theory} {A C : Formula} (nc : C.negative = false)
           · exact ⟨nΞ, rΞ⟩
           · exact hp Ω hm)
         simpa [List.append_assoc] using h)
-    apply root_to_stored (nP.append (nonpositive_flatten np)) nc
+    apply foc_to_stored (nP.append (nonpositive_flatten np)) nc
     simpa [List.append_assoc] using e
 
 theorem star_right_admissible {H : Theory} {A} (parts : List Context)
-    (ds : ∀ Γ ∈ parts, Focused H (root Γ A)) :
-    Focused H (root parts.flatten (star A)) := by
+    (ds : ∀ Γ ∈ parts, Focused H (foc Γ A)) :
+    Focused H (foc parts.flatten (star A)) := by
   apply scan_empty_build parts.flatten
   intro Δ eΔ
   obtain ⟨parts', rfl, hp⟩ := eΔ.flatten_lift
@@ -1616,18 +1632,18 @@ theorem star_right_admissible {H : Theory} {A} (parts : List Context)
     intro Γ hm
     obtain ⟨Ω, hΩ, he⟩ := hp Γ hm
     exact he.nonpositive
-  have ds' : ∀ Γ ∈ parts', Focused H (root Γ A) := by
+  have ds' : ∀ Γ ∈ parts', Focused H (foc Γ A) := by
     intro Γ hm
     obtain ⟨Ω, hΩ, he⟩ := hp Γ hm
-    exact root_expand (ds Ω hΩ) he
+    exact foc_expand (ds Ω hΩ) he
   apply Focused.storeR rfl
   exact collect_right rfl parts' np ds' [] (by simp [Nonpositive])
     (fun ps hh => .decideR rfl (.starR ps (fun Γ hm => (hh Γ hm).2)))
 
 private theorem bang_left_nonnegs {H : Theory} {L R A C} (n : Nat)
     (nc : C.negative = false)
-    (d : Focused H (root (L ++ List.replicate n A ++ R) C)) :
-    Focused H (root (L ++ bang A :: R) C) := by
+    (d : Focused H (foc (L ++ List.replicate n A ++ R) C)) :
+    Focused H (foc (L ++ bang A :: R) C) := by
   have eqv := expand_block_iff (H := H) [] L (bang A :: R) [] C .active
   simp only [List.nil_append] at eqv
   apply eqv.mpr
@@ -1636,19 +1652,19 @@ private theorem bang_left_nonnegs {H : Theory} {L R A C} (n : Nat)
   simp only [List.append_nil, List.append_assoc, List.singleton_append] at eqv
   apply eqv.mpr
   intro R' eR
-  have dL := root_expand_block (P := []) (Γ := L) (R := List.replicate n A ++ R)
+  have dL := foc_expand_block (P := []) (Γ := L) (R := List.replicate n A ++ R)
     (by simpa [List.append_assoc] using d) eL
-  have dR := root_expand_block (P := L' ++ List.replicate n A) (Γ := R) (R := [])
+  have dR := foc_expand_block (P := L' ++ List.replicate n A) (Γ := R) (R := [])
     (by simpa [List.append_assoc] using dL) eR
   have e : Focused H (.up L' (List.replicate n A ++ R') C .stored) :=
     (store_right_iff nc).mp ((scan_nonpositive_iff eL.nonpositive).mp
-      (by simpa [root, List.append_assoc] using dR))
+      (by simpa [foc, List.append_assoc] using dR))
   exact stored_to_root (eL.nonpositive.append ((Nonpositive.singleton rfl).append eR.nonpositive))
     nc (.bangL n e)
 
 theorem bang_left_admissible {H : Theory} {L R A C} (n : Nat)
-    (d : Focused H (root (L ++ List.replicate n A ++ R) C)) :
-    Focused H (root (L ++ bang A :: R) C) := by
+    (d : Focused H (foc (L ++ List.replicate n A ++ R) C)) :
+    Focused H (foc (L ++ bang A :: R) C) := by
   induction C generalizing L R with
   | atom p => exact bang_left_nonnegs n rfl d
   | zero => exact bang_left_nonnegs n rfl d
@@ -1669,7 +1685,7 @@ theorem bang_left_admissible {H : Theory} {L R A C} (n : Nat)
       ⟨ihD (conj_right_any_iff.mp d).1, ihE (conj_right_any_iff.mp d).2⟩
 
 theorem bang_right_admissible {H : Theory} {A B}
-    (d : Focused H (root [A] B)) : Focused H (root [bang A] (bang B)) :=
+    (d : Focused H (foc [A] B)) : Focused H (foc [bang A] (bang B)) :=
   stored_to_root (.singleton rfl) rfl (.bangR d)
 
 end Focusing
@@ -1718,7 +1734,7 @@ theorem Unfocused.hypothesis {H : Theory} {A : Formula} (h : H A) :
 
 /-- An atomic canonical identity already has a direct focused proof. -/
 theorem canonical_atom_identity (H : Theory) (p : Nat) :
-    Focused H (foc [atom p] (atom p)) := by
+    Focused H (canonical [atom p] (atom p)) := by
   exact .decideR rfl (.identity p)
 
 end Focusing
@@ -1731,9 +1747,9 @@ open Formula Judgment Side
 
 /-- Unconditional focalization of the calculus with normalized hypothesis cuts. -/
 theorem normalized_focusing {H : Theory} {Γ A} (d : Unfocused H Γ A) :
-    Focused H (root Γ A) := by
+    Focused H (foc Γ A) := by
   induction d with
-  | identity p => exact root_iff_foc.mpr (canonical_atom_identity H p)
+  | identity p => exact foc_iff_canonical.mpr (canonical_atom_identity H p)
   | tensorL _ ih => exact tensor_left_any_iff.mpr ih
   | tensorR _ _ ih₁ ih₂ => exact tensor_right_admissible ih₁ ih₂
   | ldivL _ _ ih₁ ih₂ => exact ldiv_left_admissible ih₁ ih₂
@@ -1832,7 +1848,7 @@ theorem normalized_to_ordinary {H : Theory} {Γ A} (d : Unfocused H Γ A) :
   | ncut h _ ih => simpa using Ordinary.cut (Ordinary.hypothesis h) ih
 
 /-- The fully proved direction of theorem:focusing. -/
-theorem focused_sound {H : Theory} {Γ A} (d : Focused H (root Γ A)) :
+theorem focused_sound {H : Theory} {Γ A} (d : Focused H (foc Γ A)) :
     Ordinary H Γ A :=
   normalized_to_ordinary (erase d)
 
@@ -2040,11 +2056,11 @@ theorem cut_normalization {H : Theory} {Γ A} (d : Ordinary H Γ A) :
 
 /-- The requested direction, with no mathematical premises besides derivability. -/
 theorem focusing_complete {H : Theory} {Γ A} (d : Ordinary H Γ A) :
-    Focused H (root Γ A) := normalized_focusing (cut_normalization d)
+    Focused H (foc Γ A) := normalized_focusing (cut_normalization d)
 
 /-- Exact full equivalence of theorem:focusing. -/
 theorem focusing {H : Theory} {Γ A} :
-    Ordinary H Γ A ↔ Focused H (root Γ A) :=
+    Ordinary H Γ A ↔ Focused H (foc Γ A) :=
   ⟨focusing_complete, focused_sound⟩
 
 end Focusing
@@ -2056,7 +2072,7 @@ namespace Focusing.Examples
 open Formula Judgment Side
 
 /-- Empty antecedents are allowed. -/
-theorem empty_one (H : Theory) : Focused H (root [] one) :=
+theorem empty_one (H : Theory) : Focused H (foc [] one) :=
   .storeR rfl (.decideR rfl .oneR)
 
 private theorem ones (H : Theory) (n : Nat) :
@@ -2066,13 +2082,13 @@ private theorem ones (H : Theory) (n : Nat) :
   | succ n ih => simpa [List.replicate_succ] using Focused.oneL ih
 
 /-- A genuinely infinitary proof: the premises have unbounded finite depths. -/
-theorem star_one (H : Theory) : Focused H (root [star one] one) := by
+theorem star_one (H : Theory) : Focused H (foc [star one] one) := by
   apply Focused.starL
   intro n
   simpa using ones H n
 
 /-- Multiplexing with n = 0. -/
-theorem bang_zero_copies (H : Theory) : Focused H (root [bang one] one) := by
+theorem bang_zero_copies (H : Theory) : Focused H (foc [bang one] one) := by
   apply Focused.storeL rfl
   apply Focused.storeR rfl
   apply Focused.bangL 0
@@ -2080,7 +2096,7 @@ theorem bang_zero_copies (H : Theory) : Focused H (root [bang one] one) := by
 
 /-- A theory formula is inserted under the left focus by decide_H. -/
 theorem atomic_hypothesis {H : Theory} {p : Nat} (h : H (atom p)) :
-    Focused H (root [] (atom p)) := by
+    Focused H (foc [] (atom p)) := by
   apply Focused.storeR rfl
   apply Focused.decideH (L := []) (R := []) h
   apply Focused.releaseL rfl
@@ -2089,7 +2105,7 @@ theorem atomic_hypothesis {H : Theory} {p : Nat} (h : H (atom p)) :
 
 /-- A noncommutative left-division application. -/
 theorem left_application (H : Theory) (p q : Nat) :
-    Focused H (root [atom p, ldiv (atom p) (atom q)] (atom q)) := by
+    Focused H (foc [atom p, ldiv (atom p) (atom q)] (atom q)) := by
   apply Focused.storeL rfl
   apply Focused.storeL rfl
   apply Focused.storeR rfl
