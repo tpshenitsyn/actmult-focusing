@@ -1,0 +1,6 @@
+name = "actmult_focusing"
+version = "1.0.0"
+defaultTargets = ["FocusingComplete"]
+
+[[lean_lib]]
+name = "FocusingComplete"
